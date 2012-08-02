@@ -6,7 +6,7 @@ const int BATT_PIN = A0;
 const int COIL_PIN = A1;
 const int FREQ_PIN = A2;
 const int PWR_BATT = A3;
-//const int PWR_COIL = A4;
+const int ALIGN_COIL = A4;
 const int PWR_MC = A5;
 const int PAIR_PIN = A7; //give this pin VCC to enter bluetooth pair mode for 30 seconds
 
@@ -29,7 +29,7 @@ char EOP ='>';
 
 boolean started = false;
 boolean ended = false; //DO NOT initialize each time the loop goes around, the loop happens faster than 9600baud sometimes
-char inData[80];
+char inData[30];
 byte index=0;
 
 int i =0;
@@ -44,7 +44,7 @@ String battVolt_str = "";
 
 // Setup program
 void setup() {
-  Serial.begin(9600); //increase for speed?
+  Serial.begin(38400); //increase for speed?
   Serial.flush();
   pinMode(PWM_PIN, OUTPUT);
   pinMode(FREQ_PIN, INPUT); 
@@ -69,7 +69,7 @@ void loop() {
       ended = true;
     }
     else {
-      if (index < 79) {
+      if (index < 29) {
         //Serial.println("inChar"); //DEBUG causes echo error to bluetooth
         inData[index] = inChar;
         index++;
@@ -84,7 +84,7 @@ void loop() {
     //we are here b/c end of packet arrived OR all data read
     if(started && ended) {
       //complete packet, process
-      Serial.println("received"); //DEBUG
+      //Serial.println("received"); //DEBUG
       analogWrite(PWM_PIN, inData[0]); // make pwm signal (0-255)
       //reset for next packet
       started = false;
@@ -106,7 +106,7 @@ void loop() {
     //dtostrf(battFxnI, 5, 2, s);
     power();
     RPM = getFrequency();
-    Serial.println("makestring");
+    //Serial.println("makestring");
 
     stringFinal = "";
     //Serial.println(stringFinal);
@@ -137,7 +137,7 @@ void loop() {
     stringFinal += EOP;
     //Serial.println(stringFinal);
     stringFinal +='.'; //extra
-    Serial.println("string made");
+    //Serial.println("string made");
     char s1[stringFinal.length()];
     stringFinal.toCharArray(s1, stringFinal.length());
     Serial.println(s1);
@@ -154,7 +154,7 @@ void loop() {
 
 //coil voltage
 String coilCoupling() {
-  Serial.println("coil");
+  //Serial.println("coil");
   int coilSensor = 0;
   for (i=0; i<40; i++){
     coilSensor += analogRead(COIL_PIN);
@@ -169,7 +169,7 @@ String coilCoupling() {
 
 // Internal Battery Voltage
 String BatteryVoltage() {
-  Serial.println("voltage");
+  //Serial.println("voltage");
   for (i=0; i<40; i++){
     battSensor += analogRead(BATT_PIN);
   }
@@ -206,7 +206,7 @@ String BatteryVoltage() {
 
 //power measurement function across defined resistor
 void power() { 
-  Serial.println("power");
+  //Serial.println("power");
   int pwrBatt = 0;
   //float pwrCoil = 0;
   int pwrMC = 0;
@@ -223,16 +223,16 @@ void power() {
   iBatt = long(iBatt/40*3.3/1024*1000); //mV
   iMC = long(iMC/40*3.3/1024*1000);
 
-  //Serial.println(iBatt);
+  Serial.println(iBatt);
   //Serial.println(iCoil);
-  //Serial.println(iMC);
+  0Serial.println(iMC);
 
   iBatt = long(iBatt/PWR_R); //in mA
   //iCoil = iCoil/40/PWR_R*3.3/255*1000; //in mA,
   iMC = long(iMC/PWR_R); //in mA,
 
   //Serial.println(iBatt);
-  // Serial.println(iCoil);
+  //Serial.println(iCoil);
   //Serial.println(iMC);
 
   pwrBatt = long(iBatt * battVolt); //power in mW
@@ -258,7 +258,7 @@ void power() {
 
 // Get frequency function and take average
 String getFrequency() {
-  Serial.println("freq");
+  //Serial.println("freq");
   long pulse = 0;
   long rpm = 0; //could make this int by dividing by 1000
   long pulse1 = 0;
