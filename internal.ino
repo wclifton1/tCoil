@@ -1,11 +1,6 @@
 // Internal Microcontroller Code
-//TODO: needed?
-char PWMSignal = 0;
-char otherSignal = 0;
-int sensorValue = 0;
 
 const int PWM_PIN = 5; // digital pin output
-
 const int LED = 13;
 const int BATT_PIN = A0;
 const int COIL_PIN = A1;
@@ -17,11 +12,17 @@ const int PAIR_PIN = A7; //give this pin VCC to enter bluetooth pair mode for 30
 
 float PWR_R = 0.5;
 
+float battVolt = 0;
+float coilVolt = 0;
+int battSensor = 0;
+char p3[32];
+char p4[32];
+char p5[32];
+
 int maxSensorVal = 640; //empirically calibrate, 100% battery
 int minSensorVal = 465; //empirically calibrate, battery cutoff
 int vScale = 154; // empirically determine (analog input/x = voltage) for two 100kOhm
 int vScalePwr = 16; //empir. for 1MOhm then 100kOhm
-int sysPower = 0; //empir power of system with motor off in mW. so we display only motor power draw
 
 char SOP ='<';
 char EOP ='>';
@@ -35,11 +36,10 @@ int i =0;
 
 String stringFinal = "";
 
-String msg = "";
+String coilVolt_str = "";
 String RPM = "";
-String bat = "";
-String batvolt = "";
-String power = "";
+String battFxn= "";
+String battVolt_str = "";
 
 // Setup program
 void setup() {
@@ -53,21 +53,18 @@ void setup() {
 
 // Main loop
 void loop() {
-  //Serial.println("startloop"); //DEBUG
+  Serial.println("startloop"); //DEBUG
   //read all serial data available, as fast as possible
 
   while(Serial.available() > 0){
-    //Serial.println("serial available"); //DEBUG
     char inChar = Serial.read();
     if(inChar == SOP) {
-      //Serial.println("SOP"); //DEBUG
       index=0;
       inData[index] = '\0';
       started = true;
       ended = false;
     }
     else if(inChar == EOP) {
-      //Serial.println("EOP"); //DEBUG
       ended = true;
     }
     else {
@@ -80,19 +77,15 @@ void loop() {
       else {
         index=0;
         started=false;
-        //Serial.println(">79"); //DEBUG
       }
     }
-    //Serial.println(started); //DEBUG
-    //Serial.println(ended); //DEBUG
+
     //we are here b/c end of packet arrived OR all data read
-    //Serial.println("end data or all read"); //DEBUG
     if(started && ended) {
       //complete packet, process
-      //Serial.println("received"); //DEBUG
+      Serial.println("received"); //DEBUG
       analogWrite(PWM_PIN, inData[0]); // make pwm signal (0-255)
       //reset for next packet
-      //Serial.println("reset"); //DEBUG
       started = false;
       ended = false;
       index = 0;
@@ -105,115 +98,143 @@ void loop() {
     delay (500); //in order to not create too many data points for the app to process, crashing android processing after 5 min with
     digitalWrite(LED, LOW);   // set the LED off
 
-    msg = coilCoupling();
-    RPM = getFrequency(); //TODO
-    bat = batteryFunction();
-    batvolt = BatteryVoltage();
-    power = Power();
+    coilVolt_str = coilCoupling();
+    battVolt_str = BatteryVoltage();
+    battFxn = batteryFunction();
+    Serial.println(battFxn);
+    power();
+    RPM = getFrequency();
+    Serial.println("makestring");
 
     stringFinal = "";
+    Serial.println(stringFinal);
     stringFinal += SOP;
-    stringFinal += "in"; //for parsing source
-    stringFinal += ",";
-    stringFinal += bat;
-    stringFinal += ",";
-    stringFinal += batvolt;
-    stringFinal += ",";
-    stringFinal += RPM;
-    stringFinal += ",";
-    stringFinal += msg;
-    stringFinal += ",";
-    stringFinal += power;
+    Serial.println(stringFinal);
+    stringFinal += "in;"; //for parsing source
+    Serial.println(stringFinal);
+    stringFinal += battFxn;
+    Serial.println(stringFinal);
+    stringFinal += 'z';
+    stringFinal += battVolt_str;
+    Serial.println(stringFinal);
+    //stringFinal += ';';
+    //stringFinal += RPM;
+    //Serial.println(stringFinal);
+    //stringFinal += ';';
+    stringFinal += coilVolt_str;
+    Serial.println(stringFinal);
+    //stringFinal += ';';
+    stringFinal += p3;
+    Serial.println(stringFinal);
+    //stringFinal += ';';
+    stringFinal += p4;
+    Serial.println(stringFinal);
+    //stringFinal += ';';
+    stringFinal += p5;
+    Serial.println(stringFinal);
     stringFinal += EOP;
+    Serial.println(stringFinal);
     stringFinal +='.'; //extra
+    Serial.println(stringFinal);
     char s1[stringFinal.length()];
     stringFinal.toCharArray(s1, stringFinal.length());
     Serial.println(s1);
   } 
 
-  if (analogRead(PAIR_PIN)>700) {
+  if (analogRead(PAIR_PIN)>1000) {
     Serial.println("");
     Serial.println("+INQ=1"); //pairing code
     delay(30000);
     Serial.println("");
-    Serial.println("+INQ=0");
+    Serial.println("+INQ=0"); //end pairing code
   }
 }
 
-//power measurement function across defined resistor
-String Power() { 
-  float pwr3 = 0;
-  float pwr4 = 0;
-  float pwr5 = 0;
-  float i3=0;
-  float i4=0;
-  float i5=0;
-  
+//coil voltage
+String coilCoupling() {
+  Serial.println("coil");
+  int coilSensor = 0;
   for (i=0; i<40; i++){
-    i3 += analogRead(PWR_BATT)/PWR_R;
-    i4 += analogRead(PWR_COIL)/PWR_R;
-    i5 += analogRead(PWR_MC)/PWR_R;
+    coilSensor += analogRead(COIL_PIN);
   }
+  coilSensor = coilSensor/40;
 
-  i3 = i3/40;
-  i4 = i4/40;
-  i5 = i5/40;
-  
-  pwr3 = i3 * 
-  pwr = float(v*v)/vScalePwr/PWR_R*1000-sysPower; //equals power in mW
-
-  if (pwr<0){
-    pwr=0;
-  }
-
-  //Serial.println(pwr);
-
-  char p[32];
-  dtostrf(pwr,3,0,p);
-  return (p);
-  //Serial.println("endpower");
-}
-
-//analog measurement function
-String coilCoupling() { //Voltage is > 1.5 means coupled
-  float voltage = 0;
-  int sensorValue = analogRead(COIL_PIN);
-  voltage = (float)sensorValue/vScale; //empirically determined
+  coilVolt = (float)coilSensor/vScale; //empirically determined
   char v[32];
-  dtostrf(voltage,5,2,v);
+  dtostrf(coilVolt,5,2,v);
   return (v);
-  //return("99");
 }
 
 // Internal Battery Voltage
 String BatteryVoltage() {
-  sensorValue = analogRead(BATT_PIN);
-  float batvolt = 0;
-  batvolt = (float)sensorValue/vScale;
+  Serial.println("voltage");
+  for (i=0; i<40; i++){
+    battSensor += analogRead(BATT_PIN);
+  }
+  battSensor = battSensor/40;
+
+  battVolt = (float)battSensor/vScale;
   char s[32];
-  dtostrf(batvolt, 5, 2, s);
+  dtostrf(battVolt, 5, 2, s);
   return(s);
-  //return("99");
 }
 
 // Internal Battery Life
 String batteryFunction() {
+  Serial.println("fxn");
   int BatteryLife;
-  BatteryLife= (100-100*(maxSensorVal-(float)sensorValue)/(maxSensorVal-minSensorVal)); //3.3V (480) - 4.5V (640) is 0-100%
-  if (BatteryLife < 0) {
-    BatteryLife = 0;
-  }
-  if (BatteryLife > 100){
-    BatteryLife = 100;
-  }
+  BatteryLife = (100-100*(maxSensorVal-(float)battSensor)/(maxSensorVal-minSensorVal)); //3.3V (480) - 4.5V (640) is 0-100%
+//  if (BatteryLife < 0) {
+//    BatteryLife = 0;
+//  }
+//  if (BatteryLife > 100){
+//    BatteryLife = 100;
+//  }
   char q[32];
-  dtostrf(BatteryLife, 5, 2, q);
+  dtostrf(BatteryLife, 2, 0, q);
   return(q);
-  //return("99");
+}
+
+//power measurement function across defined resistor
+void power() { 
+  Serial.println("power");
+  float pwrBatt = 0;
+  float pwrCoil = 0;
+  float pwrMC = 0;
+  float iBatt=0;
+  float iCoil=0;
+  float iMC=0;
+
+  for (i=0; i<40; i++){
+    iBatt += analogRead(PWR_BATT);
+    iCoil += analogRead(PWR_COIL);
+    iMC += analogRead(PWR_MC);
+  }
+
+  iBatt = iBatt/40/PWR_R; //average and convert voltage to current
+  iCoil = iCoil/40/PWR_R;
+  iMC = iMC/40/PWR_R;
+
+  Serial.println("iBatt");
+  //Serial.println(iCoil);
+  //Serial.println(iMC);
+
+  pwrBatt = iBatt * battVolt * 1000; //equals power in mW
+  pwrCoil = iCoil * coilVolt * 1000;
+  pwrMC = iMC * 12 * 1000;
+
+  if (pwrCoil<0) pwrCoil=0;
+  if (pwrBatt<0) pwrBatt=0;
+  if (pwrMC<0) pwrMC=0;
+
+  dtostrf(pwrCoil,3,0,p3);
+  dtostrf(pwrBatt,3,0,p4);
+  dtostrf(pwrMC,3,0,p5);
 }
 
 // Get frequency function and take average
 String getFrequency() {
+  Serial.println("freq");
   long pulse = 0;
   long rpm = 0; //could make this int by dividing by 1000
   long pulse1 = 0;
@@ -234,6 +255,6 @@ String getFrequency() {
     rpmout = String(rpm)+"000";
   }
   return(rpmout);
-  //return("99");
 }
+
 
