@@ -1,5 +1,11 @@
 // External Battery 
 
+String SOP = "<";
+String EOP = ">";
+//
+//#define SOP '<'
+//#define EOP '>'
+
 void setup() {
   Serial.begin(9600);
 }
@@ -15,20 +21,21 @@ String BatteryFunction2(int BatteryPin) {
   float BatteryVoltage = (float)sensorValue/212;
   float BattVolt = BatteryVoltage*6;
   float BatteryLife = float(28.57*BattVolt - 528.5);
-  
+
   if (BatteryLife < 0)
-	BatteryLife = 0;
+    BatteryLife = 0;
   if (BatteryLife > 100)
-	BatteryLife = 100;
+    BatteryLife = 100;
   char b1[32];
   dtostrf(BatteryLife, 5, 2, b1);
   char b2[32];
   dtostrf(BattVolt, 5, 2, b2);
-  //Serial.print("Sensor Value =");
-  //Serial.println(sensorValue);
 
-  String s = "#ex,"+String(b1) + ",";
-  s= s + String(b2)+",<!MSG>";
+  String s = SOP+"ex,";
+  s += String(b1) + ",";
+  s += String(b2)+EOP;
+  s.replace(" ",""); //purge spaces from dtostrf
   return(s);
 }
+
 
