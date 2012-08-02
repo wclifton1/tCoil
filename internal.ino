@@ -1,13 +1,20 @@
 // Internal Microcontroller Code
+//TODO: needed?
 char PWMSignal = 0;
 char otherSignal = 0;
 int sensorValue = 0;
 
-const int PWM_PIN = 6; // digital pin output
-const int FREQ_PIN = A2;
-const int BAT_PIN = A0;
+const int PWM_PIN = 5; // digital pin output
+const int BAT_PIN = A0; //downstream from low ohm resistor
 const int STATUS_PIN = A1;
+const int FREQ_PIN = A2;
 const int led = 13;
+const int PWR_VUP = A3; //upstream from low ohm resistor for pwr measurement
+
+int PWR_R = 1;
+
+int maxSensorVal = 640; //empirically calibrate, 100% battery
+int minSensorVal = 465; //empirically calibrate, battery cutoff
 
 char SOP ='<';
 char EOP ='>';
@@ -17,12 +24,15 @@ boolean ended = false;
 char inData[80];
 byte index;
 
+int i =0;
+
 String stringFinal = "";
 
 String msg = "";
 String RPM = "";
 String bat = "";
 String batvolt = "";
+String power = "";
 
 // Setup program
 void setup() {
@@ -36,48 +46,73 @@ void setup() {
 
 // Main loop
 void loop() {
-  //digitalWrite(led, HIGH);
-  
-
+  //Serial.println("startloop"); //DEBUG
   //read all serial data available, as fast as possible
   while(Serial.available() > 0){
+    //Serial.println("serial available"); //DEBUG
     char inChar = Serial.read();
     if(inChar == SOP) {
+      Serial.println("SOP"); //DEBUG
       index=0;
       inData[index] = '\0';
       started = true;
       ended = false;
     }
     else if(inChar == EOP) {
+      Serial.println("EOP"); //DEBUG
       ended = true;
       break;
     }
     else {
       if (index < 79) {
+        //Serial.println(inChar); //DEBUG causes echo error to bluetooth
         inData[index] = inChar;
         index++;
         inData[index] = '\0';
       }
+      else {
+        index=0;
+        started=false;
+      }
     }
   }
+
   //we are here b/c end of packet arrived OR all data read
+  //Serial.println("end data or all read"); //DEBUG
   if(started && ended) {
     //complete packet, process
+    Serial.println(inData[0]); //DEBUG
     analogWrite(PWM_PIN, inData[0]); // make pwm signal (0-255)
-
     //reset for next packet
+    Serial.println("reset"); //DEBUG
     started = false;
     ended = false;
     index = 0;
     inData[index] = '\0';
   }
+  else{
+    //Serial.println("incomplete packet"); //DEBUG
+    Serial.println(inData); //DEBUG
+    Serial.flush();
+  }
+
   if (Serial.available() == 0) {
-    delay (100);
-        
-    msg = DeviceCoupling(STATUS_PIN);
-    RPM = getFrequency(FREQ_PIN);
-    bat = String(BatteryFunction());
-    batvolt = String(BatteryVoltage());
+    Serial.println("no serial avail");
+    //digitalWrite(led, HIGH);   // set the LED on
+    delay (100); //in order to not create too many data points for the app to process, crashing android processing after 5 min with out it 
+    //digitalWrite(led, LOW);   // set the LED on
+    Serial.println("no serial avail");
+
+    Serial.println("couple"); //DEBUG
+    msg = DeviceCoupling();
+    Serial.println("freq"); //DEBUG
+    RPM = getFrequency();
+    Serial.println("batt function"); //DEBUG
+    bat = BatteryFunction();
+    Serial.println("battery voltage"); //DEBUG
+    batvolt = BatteryVoltage();
+    Serial.println("power"); //DEBUG
+    power = Power();
 
     stringFinal = "";
     stringFinal += SOP;
@@ -90,35 +125,45 @@ void loop() {
     stringFinal += RPM;
     stringFinal += ",";
     stringFinal += msg;
+    stringFinal += ",";
+    stringFinal += power;
     stringFinal += EOP;
     stringFinal +='.'; //extra
-
     char s1[stringFinal.length()];
     stringFinal.toCharArray(s1, stringFinal.length());
     Serial.println(s1);
   }
-  //digitalWrite(led, LOW);
-  //delay(250);
+}
+
+//power measurement function across defined resistor
+String Power() { 
+  float pwr = 0;
+  float v = 0;
+  float vup = (float)analogRead(PWR_VUP)/141;
+  //Serial.println(vup);
+  float vdown = (float)analogRead(BAT_PIN)/141;
+  //Serial.println(vdown);
+  v = (vup-vdown);
+  pwr = v*v/PWR_R*1000; //equals power in mW TODO: determine 141 value
+  //Serial.println(pwr); 
+  char p[32];
+  dtostrf(pwr,5,2,p);
+  return (p);
 }
 
 //analog measurement function
-String DeviceCoupling(int AnalogInPin) { //Voltage is > 1.5 means coupled
-  float Voltage = 0;
-  String msg;
-  int sensorValue = analogRead(AnalogInPin);
-  Voltage = (float)sensorValue/141; //empirically determined
-  //Serial.println(Voltage);
-  if(Voltage > 1.5)
-    msg = "1";
-  else
-    msg = "0";
-  return msg;
+String DeviceCoupling() { //Voltage is > 1.5 means coupled
+  float voltage = 0;
+  int sensorValue = analogRead(STATUS_PIN);
+  voltage = (float)sensorValue/141; //empirically determined
+  char v[32];
+  dtostrf(voltage,5,2,v);
+  return (v);
 }
 
 // Internal Battery Voltage
 String BatteryVoltage() {
   sensorValue = analogRead(BAT_PIN);
-  //Serial.println(sensorValue); //DEBUG
   float batvolt = 0;
   batvolt = (float)sensorValue/141;
   char s[32];
@@ -128,46 +173,47 @@ String BatteryVoltage() {
 
 // Internal Battery Life
 String BatteryFunction() {
-  float BatteryLife;
-  float BatteryVoltage;
-
-  BatteryVoltage = (float)sensorValue/141;
-  BatteryLife= (100-(640-sensorValue)/110); // 3.3V (530) - 4.5V (640) is 0-100%
-  if (BatteryLife < 0) 
+  int BatteryLife;
+  BatteryLife= (100-100*(maxSensorVal-(float)sensorValue)/(maxSensorVal-minSensorVal)); //3.3V (480) - 4.5V (640) is 0-100%
+  if (BatteryLife < 0) {
     BatteryLife = 0;
-  if (BatteryLife > 100)
+  }
+  if (BatteryLife > 100){
     BatteryLife = 100;
-
+  }
   char s[32];
   dtostrf(BatteryLife, 5, 2, s);
   return(s);
 }
 
 // Get frequency function and take average
-String getFrequency(int FREQ_PIN) {
+String getFrequency() {
   long pulse = 0;
   long rpm = 0; //could make this int by dividing by 1000
   long pulse1 = 0;
   long pulse2 = 0;
   int samples = 10;
   String rpmout = "";
-  for(int j=0; j<samples; j++) pulse1+= pulseIn(FREQ_PIN, HIGH, 40000);
-  for(int j=0; j<samples; j++) pulse2+= pulseIn(FREQ_PIN, LOW, 40000); //this timeout delays the whole loop, previously 250000
-  pulse = pulse1 + pulse2;
+  for(int j=0; j<samples; j++) pulse1+= pulseIn(FREQ_PIN, HIGH, 40000); //returns length of 10 high pulses
+  for(int j=0; j<samples; j++) pulse2+= pulseIn(FREQ_PIN, LOW, 40000); //returns length of 10 low pulses
+  pulse = pulse1 + pulse2; //length of 10 rotations if sensor is set to 1/revolution, currently set that way
   pulse = pulse/10;
-  //float temprpm = float(33012-.7401*pulse);
   float temprpm = float(60*1000000/pulse); //pulse units are us/cycle, cycles/us=1/pulse, 1000000/pulse=cycles/s, 60*1000000/pulse=rpm
   rpm = long(temprpm); //int() not large enough
-  //Serial.println(temprpm);
-  //Serial.println(rpm);
   if (rpm < 0) 
-    rpmout = "Motor is not running.";
+    rpmout = "0";
   else {
     rpm = rpm/1000;
     rpmout = String(rpm)+"000";
   }
   return(rpmout);
 }
+
+
+
+
+
+
 
 
 
