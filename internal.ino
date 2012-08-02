@@ -1,6 +1,7 @@
-// Internal Microcontroller Code
+// Internal Arduino Code
+// v10 6/20/12
 
-const int PWM_PIN = 5; // digital pin output
+const int PWM_PIN = 6; // digital pin output
 const int LED = 13;
 const int BATT_PIN = A0;
 const int COIL_PIN = A1;
@@ -10,11 +11,8 @@ const int ALIGN_COIL = A4;
 const int PWR_MC = A5;
 const int PAIR_PIN = A7; //give this pin VCC to enter bluetooth pair mode for 30 seconds
 
-float PWR_R = 1;
+int PWR_R = 1;
 
-float battVolt = 0;
-float coilVolt = 0;
-int battSensor = 0;
 String p3;
 String p4;
 String p5;
@@ -34,13 +32,16 @@ byte index=0;
 
 int i =0;
 
-String stringFinal = "";
+//String stringFinal = "";
 
-String coilVolt_str = "";
-String RPM = "";
-//String battFxn= "";
-//int battFxnI=0;
-String battVolt_str = "";
+
+String coilVolt_str = "0000";
+String coilAlign_str = "0000";
+String RPM = "00000";
+String battVolt_str = "0000";
+String stringFinal = "00000000000000000000000000000000000";
+
+int battVolt = 0;
 
 // Setup program
 void setup() {
@@ -49,7 +50,7 @@ void setup() {
   pinMode(PWM_PIN, OUTPUT);
   pinMode(FREQ_PIN, INPUT); 
   pinMode(LED, OUTPUT);
-  analogWrite(PWM_PIN, 50);  //turn on motor
+  analogWrite(PWM_PIN, 255);  //turn on motor
 }
 
 // Main loop
@@ -99,22 +100,17 @@ void loop() {
     delay (500); //in order to not create too many data points for the app to process, crashing android processing after 5 min with
     digitalWrite(LED, LOW);   // set the LED off
 
-    coilVolt_str = coilCoupling();
-    battVolt_str = BatteryVoltage();
-    //battFxnI = batteryFunction();
-    //battFxn = String(battFxnI);
-    //dtostrf(battFxnI, 5, 2, s);
+    coilCoupling();
+    BatteryVoltage();
     power();
     RPM = getFrequency();
     //Serial.println("makestring");
 
     stringFinal = "";
-    //Serial.println(stringFinal);
+    //Serial.println("empty");
     stringFinal += SOP;
     //Serial.println(stringFinal);
     stringFinal += "in"; //for parsing source
-    //Serial.println(stringFinal);
-    //stringFinal += battFxn;
     //Serial.println(stringFinal);
     stringFinal += ',';
     stringFinal += battVolt_str;
@@ -129,11 +125,12 @@ void loop() {
     stringFinal += p3;
     //Serial.println(stringFinal);
     stringFinal += ',';
-    //stringFinal += p4;
-    //Serial.println(stringFinal);
-    //stringFinal += ',';
     stringFinal += p5;
     //Serial.println(stringFinal);
+    stringFinal += ',';
+    stringFinal += coilAlign_str;
+    //Serial.println(stringFinal);
+
     stringFinal += EOP;
     //Serial.println(stringFinal);
     stringFinal +='.'; //extra
@@ -153,112 +150,82 @@ void loop() {
 }
 
 //coil voltage
-String coilCoupling() {
+void coilCoupling() {
   //Serial.println("coil");
-  int coilSensor = 0;
+  long coilSensor = 0;
+  long alignSensor = 0;
   for (i=0; i<40; i++){
     coilSensor += analogRead(COIL_PIN);
+    alignSensor += analogRead(ALIGN_COIL);
   }
   coilSensor = coilSensor/40;
+  alignSensor = alignSensor/40;
 
-  coilVolt = (float)coilSensor/vScale; //empirically determined
-  char v[32];
-  dtostrf(coilVolt,5,2,v);
-  return (v);
+  coilVolt_str = String(coilSensor*3300*2/1024);
+  coilAlign_str = String(int(alignSensor*3300*6.1/1024));
+  //  char v[32];
+  //  dtostrf(coilVolt,5,2,v);
+  //  return (v);
 }
 
+
 // Internal Battery Voltage
-String BatteryVoltage() {
+void BatteryVoltage() {
   //Serial.println("voltage");
+  long battSensor = 0;
   for (i=0; i<40; i++){
     battSensor += analogRead(BATT_PIN);
   }
   battSensor = battSensor/40;
   //Serial.println(battSensor);
 
-  //battVolt = (float)battSensor/vScale;
-  battVolt = (float)battSensor*3.3/1024*2;
-  char s[32];
-  dtostrf(battVolt, 5, 2, s);
-  return(s);
+  battVolt = battSensor*3300*2/1024;
+  battVolt_str = String(battVolt);
+  //battVolt_str = "hello";
 }
-
-//// Internal Battery Life
-//int batteryFunction() {
-//  Serial.println("fxn");
-//  int BatteryLife;
-//  BatteryLife = int((100-100*(maxSensorVal-(float)battSensor)/(maxSensorVal-minSensorVal))); //3.3V (480) - 4.5V (640) is 0-100%
-//  Serial.println(BatteryLife);
-//  if (BatteryLife < 0) {
-//    BatteryLife = 0;
-//  }
-//  else if (BatteryLife > 100){
-//    BatteryLife = 100;
-//  }
-//
-//  //  String q = String(battSensor);
-//  //Serial.println(q);
-//  //  return(q);
-//  //  char s[32];
-//  //  dtostrf(BatteryLife, 5, 2, s);
-//  return(BatteryLife);
-//}
 
 //power measurement function across defined resistor
 void power() { 
   //Serial.println("power");
-  int pwrBatt = 0;
-  //float pwrCoil = 0;
-  int pwrMC = 0;
+  long pwrBatt = 0;
+  long pwrMC = 0;
   long iBatt=0;
-  long iCoil=0;
   long iMC=0;
 
   for (i=0; i<40; i++){
     iBatt += analogRead(PWR_BATT);
-    // iCoil += analogRead(PWR_COIL);
     iMC += analogRead(PWR_MC);
   }
 
-  iBatt = long(iBatt/40*3.3/1024*1000); //mV
-  iMC = long(iMC/40*3.3/1024*1000);
+  iBatt = iBatt/40;
+  iMC = iMC/40;
 
-  Serial.println(iBatt);
-  //Serial.println(iCoil);
-  0Serial.println(iMC);
+  iBatt = long(iBatt*3.3/1024*1000); //mV
+  iMC = long(iMC*3.3/1024*1000);
+
+  //Serial.println(iBatt);
+  //Serial.println(iMC);
 
   iBatt = long(iBatt/PWR_R); //in mA
-  //iCoil = iCoil/40/PWR_R*3.3/255*1000; //in mA,
   iMC = long(iMC/PWR_R); //in mA,
 
   //Serial.println(iBatt);
-  //Serial.println(iCoil);
   //Serial.println(iMC);
 
-  pwrBatt = long(iBatt * battVolt); //power in mW
-  // pwrCoil = iCoil * coilVolt;
+  pwrBatt = long(iBatt * battVolt/1000); //power in mW
   pwrMC = long(iMC * 12);
-
-  //Serial.println(battVolt);
-  //Serial.println(coilVolt);
-
 
   //Serial.println(pwrBatt);
   //Serial.println(pwrCoil);
   //Serial.println(pwrMC);
 
-  // if (pwrBatt<0) pwrBatt=0; //impossible
-  //if (pwrCoil<0) pwrCoil=0;
-  //if (pwrMC<0) pwrMC=0;
-
   p3= String(pwrBatt);
-  // p4= String(int(pwrCoil));
   p5= String(pwrMC);
 }
 
 // Get frequency function and take average
 String getFrequency() {
-  //Serial.println("freq");
+  //Serial.println("fr");
   long pulse = 0;
   long rpm = 0; //could make this int by dividing by 1000
   long pulse1 = 0;
@@ -269,20 +236,12 @@ String getFrequency() {
   for(int j=0; j<samples; j++) pulse2+= pulseIn(FREQ_PIN, LOW, 40000); //returns length of 10 low pulses
   pulse = pulse1 + pulse2; //length of 10 rotations if sensor is set to 1/revolution, currently set that way
   pulse = pulse/10;
-  float temprpm = float(60*1000000/pulse); //pulse units are us/cycle, cycles/us=1/pulse, 1000000/pulse=cycles/s, 60*1000000/pulse=rpm
-  rpm = long(temprpm); //int() not large enough
+  rpm = 60*1000000/pulse; //pulse units are us/cycle, cycles/us=1/pulse, 1000000/pulse=cycles/s, 60*1000000/pulse=rpm
   if (rpm < 0) {
     rpmout = "0";
   }
   else {
-    rpm = rpm/1000;
-    rpmout = String(rpm)+"000";
+    rpmout = String(rpm);
   }
   return(rpmout);
 }
-
-
-
-
-
-
