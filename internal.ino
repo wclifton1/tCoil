@@ -6,18 +6,18 @@ const int BATT_PIN = A0;
 const int COIL_PIN = A1;
 const int FREQ_PIN = A2;
 const int PWR_BATT = A3;
-const int PWR_COIL = A4;
+//const int PWR_COIL = A4;
 const int PWR_MC = A5;
 const int PAIR_PIN = A7; //give this pin VCC to enter bluetooth pair mode for 30 seconds
 
-float PWR_R = 0.5;
+float PWR_R = 1;
 
 float battVolt = 0;
 float coilVolt = 0;
 int battSensor = 0;
-char p3[32];
-char p4[32];
-char p5[32];
+String p3;
+String p4;
+String p5;
 
 int maxSensorVal = 640; //empirically calibrate, 100% battery
 int minSensorVal = 465; //empirically calibrate, battery cutoff
@@ -38,7 +38,8 @@ String stringFinal = "";
 
 String coilVolt_str = "";
 String RPM = "";
-String battFxn= "";
+//String battFxn= "";
+//int battFxnI=0;
 String battVolt_str = "";
 
 // Setup program
@@ -53,7 +54,7 @@ void setup() {
 
 // Main loop
 void loop() {
-  Serial.println("startloop"); //DEBUG
+  //Serial.println("startloop"); //DEBUG
   //read all serial data available, as fast as possible
 
   while(Serial.available() > 0){
@@ -100,42 +101,43 @@ void loop() {
 
     coilVolt_str = coilCoupling();
     battVolt_str = BatteryVoltage();
-    battFxn = batteryFunction();
-    Serial.println(battFxn);
+    //battFxnI = batteryFunction();
+    //battFxn = String(battFxnI);
+    //dtostrf(battFxnI, 5, 2, s);
     power();
     RPM = getFrequency();
     Serial.println("makestring");
 
     stringFinal = "";
-    Serial.println(stringFinal);
-    stringFinal += SOP;
-    Serial.println(stringFinal);
-    stringFinal += "in;"; //for parsing source
-    Serial.println(stringFinal);
-    stringFinal += battFxn;
-    Serial.println(stringFinal);
-    stringFinal += 'z';
-    stringFinal += battVolt_str;
-    Serial.println(stringFinal);
-    //stringFinal += ';';
-    //stringFinal += RPM;
     //Serial.println(stringFinal);
-    //stringFinal += ';';
+    stringFinal += SOP;
+    //Serial.println(stringFinal);
+    stringFinal += "in"; //for parsing source
+    //Serial.println(stringFinal);
+    //stringFinal += battFxn;
+    //Serial.println(stringFinal);
+    stringFinal += ',';
+    stringFinal += battVolt_str;
+    //Serial.println(stringFinal);
+    stringFinal += ',';
+    stringFinal += RPM;
+    //Serial.println(stringFinal);
+    stringFinal += ',';
     stringFinal += coilVolt_str;
-    Serial.println(stringFinal);
-    //stringFinal += ';';
+    //Serial.println(stringFinal);
+    stringFinal += ',';
     stringFinal += p3;
-    Serial.println(stringFinal);
-    //stringFinal += ';';
-    stringFinal += p4;
-    Serial.println(stringFinal);
-    //stringFinal += ';';
+    //Serial.println(stringFinal);
+    stringFinal += ',';
+    //stringFinal += p4;
+    //Serial.println(stringFinal);
+    //stringFinal += ',';
     stringFinal += p5;
-    Serial.println(stringFinal);
+    //Serial.println(stringFinal);
     stringFinal += EOP;
-    Serial.println(stringFinal);
+    //Serial.println(stringFinal);
     stringFinal +='.'; //extra
-    Serial.println(stringFinal);
+    Serial.println("string made");
     char s1[stringFinal.length()];
     stringFinal.toCharArray(s1, stringFinal.length());
     Serial.println(s1);
@@ -172,64 +174,86 @@ String BatteryVoltage() {
     battSensor += analogRead(BATT_PIN);
   }
   battSensor = battSensor/40;
+  //Serial.println(battSensor);
 
-  battVolt = (float)battSensor/vScale;
+  //battVolt = (float)battSensor/vScale;
+  battVolt = (float)battSensor*3.3/1024*2;
   char s[32];
   dtostrf(battVolt, 5, 2, s);
   return(s);
 }
 
-// Internal Battery Life
-String batteryFunction() {
-  Serial.println("fxn");
-  int BatteryLife;
-  BatteryLife = (100-100*(maxSensorVal-(float)battSensor)/(maxSensorVal-minSensorVal)); //3.3V (480) - 4.5V (640) is 0-100%
+//// Internal Battery Life
+//int batteryFunction() {
+//  Serial.println("fxn");
+//  int BatteryLife;
+//  BatteryLife = int((100-100*(maxSensorVal-(float)battSensor)/(maxSensorVal-minSensorVal))); //3.3V (480) - 4.5V (640) is 0-100%
+//  Serial.println(BatteryLife);
 //  if (BatteryLife < 0) {
 //    BatteryLife = 0;
 //  }
-//  if (BatteryLife > 100){
+//  else if (BatteryLife > 100){
 //    BatteryLife = 100;
 //  }
-  char q[32];
-  dtostrf(BatteryLife, 2, 0, q);
-  return(q);
-}
+//
+//  //  String q = String(battSensor);
+//  //Serial.println(q);
+//  //  return(q);
+//  //  char s[32];
+//  //  dtostrf(BatteryLife, 5, 2, s);
+//  return(BatteryLife);
+//}
 
 //power measurement function across defined resistor
 void power() { 
   Serial.println("power");
-  float pwrBatt = 0;
-  float pwrCoil = 0;
-  float pwrMC = 0;
-  float iBatt=0;
-  float iCoil=0;
-  float iMC=0;
+  int pwrBatt = 0;
+  //float pwrCoil = 0;
+  int pwrMC = 0;
+  long iBatt=0;
+  long iCoil=0;
+  long iMC=0;
 
   for (i=0; i<40; i++){
     iBatt += analogRead(PWR_BATT);
-    iCoil += analogRead(PWR_COIL);
+    // iCoil += analogRead(PWR_COIL);
     iMC += analogRead(PWR_MC);
   }
 
-  iBatt = iBatt/40/PWR_R; //average and convert voltage to current
-  iCoil = iCoil/40/PWR_R;
-  iMC = iMC/40/PWR_R;
+  iBatt = long(iBatt/40*3.3/1024*1000); //mV
+  iMC = long(iMC/40*3.3/1024*1000);
 
-  Serial.println("iBatt");
+  //Serial.println(iBatt);
   //Serial.println(iCoil);
   //Serial.println(iMC);
 
-  pwrBatt = iBatt * battVolt * 1000; //equals power in mW
-  pwrCoil = iCoil * coilVolt * 1000;
-  pwrMC = iMC * 12 * 1000;
+  iBatt = long(iBatt/PWR_R); //in mA
+  //iCoil = iCoil/40/PWR_R*3.3/255*1000; //in mA,
+  iMC = long(iMC/PWR_R); //in mA,
 
-  if (pwrCoil<0) pwrCoil=0;
-  if (pwrBatt<0) pwrBatt=0;
-  if (pwrMC<0) pwrMC=0;
+  //Serial.println(iBatt);
+  // Serial.println(iCoil);
+  //Serial.println(iMC);
 
-  dtostrf(pwrCoil,3,0,p3);
-  dtostrf(pwrBatt,3,0,p4);
-  dtostrf(pwrMC,3,0,p5);
+  pwrBatt = long(iBatt * battVolt); //power in mW
+  // pwrCoil = iCoil * coilVolt;
+  pwrMC = long(iMC * 12);
+
+  //Serial.println(battVolt);
+  //Serial.println(coilVolt);
+
+
+  //Serial.println(pwrBatt);
+  //Serial.println(pwrCoil);
+  //Serial.println(pwrMC);
+
+  // if (pwrBatt<0) pwrBatt=0; //impossible
+  //if (pwrCoil<0) pwrCoil=0;
+  //if (pwrMC<0) pwrMC=0;
+
+  p3= String(pwrBatt);
+  // p4= String(int(pwrCoil));
+  p5= String(pwrMC);
 }
 
 // Get frequency function and take average
@@ -256,5 +280,9 @@ String getFrequency() {
   }
   return(rpmout);
 }
+
+
+
+
 
 
