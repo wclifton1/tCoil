@@ -3,10 +3,11 @@ char PWMSignal = 0;
 char otherSignal = 0;
 int sensorValue = 0;
 
-const int PWM_PIN = 3; // digital pin output
-const int FREQ_PIN = A5;
-const int BAT_PIN = A3;
-const int STATUS_PIN = A6;
+const int PWM_PIN = 6; // digital pin output
+const int FREQ_PIN = A2;
+const int BAT_PIN = A0;
+const int STATUS_PIN = A1;
+const int led = 13;
 
 char SOP ='<';
 char EOP ='>';
@@ -29,17 +30,18 @@ void setup() {
   Serial.flush();
   pinMode(PWM_PIN, OUTPUT);
   pinMode(FREQ_PIN, INPUT); 
-  analogWrite(PWM_PIN, 0);  //turn off motor
+  pinMode(led, OUTPUT);
+  analogWrite(PWM_PIN, 0);  //turn on motor
 }
 
 // Main loop
 void loop() {
-  sensorValue = analogRead(BAT_PIN); 
+  //digitalWrite(led, HIGH);
+  
 
   //read all serial data available, as fast as possible
   while(Serial.available() > 0){
     char inChar = Serial.read();
-    //Serial.println(inChar);
     if(inChar == SOP) {
       index=0;
       inData[index] = '\0';
@@ -61,7 +63,6 @@ void loop() {
   //we are here b/c end of packet arrived OR all data read
   if(started && ended) {
     //complete packet, process
-    Serial.println(inData);
     analogWrite(PWM_PIN, inData[0]); // make pwm signal (0-255)
 
     //reset for next packet
@@ -71,6 +72,8 @@ void loop() {
     inData[index] = '\0';
   }
   if (Serial.available() == 0) {
+    delay (100);
+        
     msg = DeviceCoupling(STATUS_PIN);
     RPM = getFrequency(FREQ_PIN);
     bat = String(BatteryFunction());
@@ -94,6 +97,8 @@ void loop() {
     stringFinal.toCharArray(s1, stringFinal.length());
     Serial.println(s1);
   }
+  //digitalWrite(led, LOW);
+  //delay(250);
 }
 
 //analog measurement function
@@ -101,8 +106,8 @@ String DeviceCoupling(int AnalogInPin) { //Voltage is > 1.5 means coupled
   float Voltage = 0;
   String msg;
   int sensorValue = analogRead(AnalogInPin);
-  Voltage = (float)sensorValue/214;
-  Serial.println(Voltage);
+  Voltage = (float)sensorValue/141; //empirically determined
+  //Serial.println(Voltage);
   if(Voltage > 1.5)
     msg = "1";
   else
@@ -112,8 +117,10 @@ String DeviceCoupling(int AnalogInPin) { //Voltage is > 1.5 means coupled
 
 // Internal Battery Voltage
 String BatteryVoltage() {
+  sensorValue = analogRead(BAT_PIN);
+  //Serial.println(sensorValue); //DEBUG
   float batvolt = 0;
-  batvolt = (float)sensorValue/214;
+  batvolt = (float)sensorValue/141;
   char s[32];
   dtostrf(batvolt, 5, 2, s);
   return(s);
@@ -124,8 +131,8 @@ String BatteryFunction() {
   float BatteryLife;
   float BatteryVoltage;
 
-  BatteryVoltage = (float)sensorValue/214;
-  BatteryLife= (111 * BatteryVoltage - 310); // 2.8V-3.7V is 0-100%
+  BatteryVoltage = (float)sensorValue/141;
+  BatteryLife= (100-(640-sensorValue)/110); // 3.3V (530) - 4.5V (640) is 0-100%
   if (BatteryLife < 0) 
     BatteryLife = 0;
   if (BatteryLife > 100)
@@ -161,6 +168,7 @@ String getFrequency(int FREQ_PIN) {
   }
   return(rpmout);
 }
+
 
 
 
