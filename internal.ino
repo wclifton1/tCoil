@@ -41,25 +41,28 @@ void setup() {
   pinMode(PWM_PIN, OUTPUT);
   pinMode(FREQ_PIN, INPUT); 
   pinMode(led, OUTPUT);
-  analogWrite(PWM_PIN, 0);  //turn on motor
+  analogWrite(PWM_PIN, 100);  //turn on motor
 }
 
 // Main loop
 void loop() {
   //Serial.println("startloop"); //DEBUG
   //read all serial data available, as fast as possible
+  index=0;
+  started=false;
+  ended=false;
   while(Serial.available() > 0){
-    //Serial.println("serial available"); //DEBUG
+    Serial.println("serial available"); //DEBUG
     char inChar = Serial.read();
     if(inChar == SOP) {
-      Serial.println("SOP"); //DEBUG
+      //Serial.println("SOP"); //DEBUG
       index=0;
       inData[index] = '\0';
       started = true;
       ended = false;
     }
     else if(inChar == EOP) {
-      Serial.println("EOP"); //DEBUG
+      //Serial.println("EOP"); //DEBUG
       ended = true;
       break;
     }
@@ -81,10 +84,10 @@ void loop() {
   //Serial.println("end data or all read"); //DEBUG
   if(started && ended) {
     //complete packet, process
-    Serial.println(inData[0]); //DEBUG
+    Serial.println("received"); //DEBUG
     analogWrite(PWM_PIN, inData[0]); // make pwm signal (0-255)
     //reset for next packet
-    Serial.println("reset"); //DEBUG
+    //Serial.println("reset"); //DEBUG
     started = false;
     ended = false;
     index = 0;
@@ -92,63 +95,70 @@ void loop() {
   }
   else{
     //Serial.println("incomplete packet"); //DEBUG
-    Serial.println(inData); //DEBUG
-    Serial.flush();
+    //Serial.println(inData); //DEBUG
+    //Serial.flush();
   }
 
-  if (Serial.available() == 0) {
-    Serial.println("no serial avail");
-    //digitalWrite(led, HIGH);   // set the LED on
-    delay (100); //in order to not create too many data points for the app to process, crashing android processing after 5 min with out it 
-    //digitalWrite(led, LOW);   // set the LED on
-    Serial.println("no serial avail");
-
-    Serial.println("couple"); //DEBUG
-    msg = DeviceCoupling();
-    Serial.println("freq"); //DEBUG
-    RPM = getFrequency();
-    Serial.println("batt function"); //DEBUG
-    bat = BatteryFunction();
-    Serial.println("battery voltage"); //DEBUG
-    batvolt = BatteryVoltage();
-    Serial.println("power"); //DEBUG
-    power = Power();
-
-    stringFinal = "";
-    stringFinal += SOP;
-    stringFinal += "in"; //for parsing source
-    stringFinal += ",";
-    stringFinal += bat;
-    stringFinal += ",";
-    stringFinal += batvolt;
-    stringFinal += ",";
-    stringFinal += RPM;
-    stringFinal += ",";
-    stringFinal += msg;
-    stringFinal += ",";
-    stringFinal += power;
-    stringFinal += EOP;
-    stringFinal +='.'; //extra
-    char s1[stringFinal.length()];
-    stringFinal.toCharArray(s1, stringFinal.length());
-    Serial.println(s1);
-  }
+//  if (Serial.available() == 0) {
+//    //Serial.println("no serial avail");
+//    //digitalWrite(led, HIGH);   // set the LED on
+//    delay (500); //in order to not create too many data points for the app to process, crashing android processing after 5 min with out it 
+//    //digitalWrite(led, LOW);   // set the LED on
+//
+//    //Serial.println("couple"); //DEBUG
+//    msg = DeviceCoupling();
+//    //Serial.println("freq"); //DEBUG
+//    RPM = getFrequency(); //TODO
+//    //Serial.println("batt function"); //DEBUG
+//    bat = BatteryFunction();
+//    //Serial.println("battery voltage"); //DEBUG
+//    batvolt = BatteryVoltage();
+//    //Serial.println("power"); //DEBUG
+//    power = Power();
+//
+//    stringFinal = "";
+//    stringFinal += SOP;
+//    stringFinal += "in"; //for parsing source
+//    stringFinal += ",";
+//    stringFinal += bat;
+//    stringFinal += ",";
+//    stringFinal += batvolt;
+//    stringFinal += ",";
+//    stringFinal += RPM;
+//    stringFinal += ",";
+//    stringFinal += msg;
+//    stringFinal += ",";
+//    stringFinal += power;
+//    stringFinal += EOP;
+//    stringFinal +='.'; //extra
+//    char s1[stringFinal.length()];
+//    stringFinal.toCharArray(s1, stringFinal.length());
+//    Serial.println(s1);
+//  }
 }
 
 //power measurement function across defined resistor
 String Power() { 
   float pwr = 0;
-  float v = 0;
-  float vup = (float)analogRead(PWR_VUP)/141;
+  int v = 0;
+  int vup = (float)analogRead(PWR_VUP);
   //Serial.println(vup);
-  float vdown = (float)analogRead(BAT_PIN)/141;
+  int vdown = (float)analogRead(BAT_PIN);
   //Serial.println(vdown);
   v = (vup-vdown);
-  pwr = v*v/PWR_R*1000; //equals power in mW TODO: determine 141 value
+  if (v>0){
+    pwr = (v*v)/141/141/PWR_R*1000; //equals power in mW TODO: determine 141 value
+  }
+  else {
+    pwr=0;
+  }
   //Serial.println(pwr); 
   char p[32];
-  dtostrf(pwr,5,2,p);
+  //Serial.println("dtostrf");
+  dtostrf(pwr,3,0,p);
   return (p);
+  Serial.println("endpower");
+  //return("99");
 }
 
 //analog measurement function
@@ -159,6 +169,7 @@ String DeviceCoupling() { //Voltage is > 1.5 means coupled
   char v[32];
   dtostrf(voltage,5,2,v);
   return (v);
+  //return("99");
 }
 
 // Internal Battery Voltage
@@ -169,6 +180,7 @@ String BatteryVoltage() {
   char s[32];
   dtostrf(batvolt, 5, 2, s);
   return(s);
+  //return("99");
 }
 
 // Internal Battery Life
@@ -181,9 +193,10 @@ String BatteryFunction() {
   if (BatteryLife > 100){
     BatteryLife = 100;
   }
-  char s[32];
-  dtostrf(BatteryLife, 5, 2, s);
-  return(s);
+  char q[32];
+  dtostrf(BatteryLife, 5, 2, q);
+  return(q);
+  //return("99");
 }
 
 // Get frequency function and take average
@@ -200,14 +213,17 @@ String getFrequency() {
   pulse = pulse/10;
   float temprpm = float(60*1000000/pulse); //pulse units are us/cycle, cycles/us=1/pulse, 1000000/pulse=cycles/s, 60*1000000/pulse=rpm
   rpm = long(temprpm); //int() not large enough
-  if (rpm < 0) 
+  if (rpm < 0) {
     rpmout = "0";
+  }
   else {
     rpm = rpm/1000;
     rpmout = String(rpm)+"000";
   }
   return(rpmout);
+  //return("99");
 }
+
 
 
 
